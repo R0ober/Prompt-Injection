@@ -90,3 +90,31 @@ func (db *DB) GetOrdersByUserID(userID int) ([]Order, error) {
 	return orders, nil
 
 }
+func (db *DB) Migrate() error {
+	schema := `
+    CREATE TABLE IF NOT EXISTS users (
+        id            SERIAL PRIMARY KEY,
+        username      TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role          TEXT NOT NULL DEFAULT 'user',
+        secret_data   JSONB,
+        notes         TEXT,
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS orders (
+        id            SERIAL PRIMARY KEY,
+        user_id       INT REFERENCES users(id),
+        product       TEXT NOT NULL,
+        amount        FLOAT NOT NULL,
+        status        TEXT NOT NULL DEFAULT 'pending',
+        private_notes TEXT,
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+    );`
+
+	_, err := db.Exec(schema)
+	if err != nil {
+		return fmt.Errorf("migrate error: %w", err)
+	}
+	return nil
+}
