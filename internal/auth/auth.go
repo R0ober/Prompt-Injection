@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"fmt"
+
+	//"log"
 	"net/http"
 	"os"
 	"strings"
@@ -39,9 +41,12 @@ func Login(database *db.DB, username string, password string) (string, error) {
 		// vid fel login
 		// TODO: se till att hantera sql.ErrNoRows (ingen användare hittades) från riktiga db errors
 		// låter de vara så här nu
+		//log.Printf("DEBUG: GetUserByUsername error: %v", err)
 		return "", fmt.Errorf("invalid credentials")
 	}
+	//log.Printf("DEBUG: found user: %s hash: %s", user.Username, user.PasswordHash)
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
+	//log.Printf("DEBUG: bcrypt result: %v", err)
 	if err != nil {
 		// fel lösen
 		return "", fmt.Errorf("invalid credentials")

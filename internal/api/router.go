@@ -9,8 +9,10 @@ import (
 
 func NewRouter(database *db.DB) http.Handler {
 	mux := http.NewServeMux()
-
-	mux.Handle("POST api/login", loginHandler(database))
+	//api route
+	mux.Handle("POST /api/login", loginHandler(database))
+	//static fil
+	mux.Handle("/", http.FileServer(http.Dir("frontend")))
 
 	return mux
 }
