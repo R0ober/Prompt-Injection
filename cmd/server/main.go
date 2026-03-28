@@ -7,6 +7,8 @@ import (
 	"temp-name/internal/api"
 	"temp-name/internal/db"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 func getEnv(key, fallback string) string {
@@ -17,6 +19,14 @@ func getEnv(key, fallback string) string {
 }
 
 func main() {
+
+	// Load .env file into environment variables
+	// WARNING: never use godotenv in production — set real env vars on the server instead
+	// .env file should be in .gitignore to avoid leaking secrets
+	if err := godotenv.Load(); err != nil {
+		log.Println("no .env file found, reading from environment directly")
+	}
+	log.Printf("DEBUG api key starts with: %s", os.Getenv("OPENROUTER_API_KEY")[:8])
 	port := ":" + getEnv("PORT", "8080")
 	dbURL := getEnv("DATABASEURL", "postgres://postgres:postgres@localhost:5432/injectionlab?sslmode=disable")
 	var database *db.DB
