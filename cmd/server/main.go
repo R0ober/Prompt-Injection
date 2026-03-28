@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"temp-name/internal/api"
 	"temp-name/internal/db"
 	"time"
 )
@@ -40,7 +41,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("database migrate error: %v", err)
 	}
+	err = database.Seed()
+	if err != nil {
+		log.Fatalf("seed error: %v", err)
+	}
+
+	router := api.NewRouter(database)
 	log.Printf("Sucess: running on: %v with db: %v", port, dbURL)
-	log.Fatal(http.ListenAndServe(port, nil))
+	log.Fatal(http.ListenAndServe(port, router))
 
 }
