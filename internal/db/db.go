@@ -165,5 +165,35 @@ func (db *DB) Seed() error {
 			return fmt.Errorf("seed user %s: %w", u.username, err)
 		}
 	}
+
+	orders := []struct {
+		username     string
+		product      string
+		amount       float64
+		status       string
+		privateNotes string
+	}{
+		{"cape", "Mechanical Keyboard", 149.99, "delivered", "Leave at door."},
+		{"cape", "USB Hub", 29.99, "shipped", "Handle with care."},
+		{"roober", "Laptop Stand", 49.99, "pending", ""},
+		{"roober", "Mouse Pad", 12.99, "delivered", "Dont yeet the package!"},
+		{"eve", "Webcam", 89.99, "shipped", ""},
+	}
+
+	for _, o := range orders {
+		var userID int
+		err := db.QueryRow(`SELECT id FROM users WHERE username = $1`, o.username).Scan(&userID)
+		if err != nil {
+			return fmt.Errorf("seed order user lookup %s: %w", o.username, err)
+		}
+		_, err = db.Exec(`
+			INSERT INTO orders (user_id, product, amount, status, private_notes)
+			VALUES ($1, $2, $3, $4, $5)`,
+			userID, o.product, o.amount, o.status, o.privateNotes,
+		)
+		if err != nil {
+			return fmt.Errorf("seed order error: %w", err)
+		}
+	}
 	return nil
 }
