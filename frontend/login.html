@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Injection Lab — Login</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, sans-serif;
+            background: #0f0f11;
+            color: #e2e2e2;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card {
+            background: #1a1a1f;
+            border: 1px solid #2e2e38;
+            border-radius: 12px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        h1 {
+        font-size: 22px;
+        font-weight: 600;
+        margin-bottom: 6px;
+        
+        }
+
+        p {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 28px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            color: #aaa;
+            margin-bottom: 6px;
+        }
+
+        input {
+            width: 100%;
+            background: #0f0f11;
+            border: 1px solid #2e2e38;
+            border-radius: 8px;
+            color: #e2e2e2;
+            padding: 10px 14px;
+            font-size: 14px;
+            margin-bottom: 16px;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: #657728;
+        }
+
+        button {
+            width: 100%;
+            background: #657728;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 11px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #566526;
+        }
+
+        #error-msg {
+            background: #2a0f0f;
+            color: #f87171;
+            border: 1px solid #5b1f1f;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 13px;
+            margin-bottom: 16px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Injection Lab</h1>
+        <p>Sign in to continue</p>
+
+        <div id="error-msg"></div>
+
+        <label>Username</label>
+        <input type="text" id="username" placeholder="username">
+
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••">
+
+        <button onclick="login()">Sign in</button>
+    </div>
+
+    <script>
+        async function login() {
+            const username = document.getElementById('username').value.trim()
+            const password = document.getElementById('password').value
+            const errorMsg = document.getElementById('error-msg')
+
+            // hide any previous error
+            errorMsg.style.display = 'none'
+
+            // basic validation
+            if (!username || !password) {
+                errorMsg.textContent = 'Please enter username and password.'
+                errorMsg.style.display = 'block'
+                return
+            }
+
+            // send to backend
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                localStorage.setItem('token', data.token)
+                window.location.href = '/chat.html'
+            } else {
+                errorMsg.textContent = 'Invalid username or password.'
+                errorMsg.style.display = 'block'
+            }
+        }
+        // allow pressing Enter to login
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') login()
+        })
+    </script>
+</body>
+</html>

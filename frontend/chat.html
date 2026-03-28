@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Injection Lab — Chat</title>
+    <style>
+       
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, sans-serif;
+            background: #0f0f11;
+            color: #e2e2e2;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .topbar {
+            flex-shrink: 0;
+            background: #1a1a1f;
+            border-bottom: 1px solid #2e2e38;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .input-area {
+            flex-shrink: 0;
+            background: #1a1a1f;
+            border-top: 1px solid #2e2e38;
+            padding: 16px 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .logo {
+            font-weight: 700;
+            font-size: 15px;
+            color: #90A63C;
+        }
+
+        .spacer {
+            flex: 1;
+        }
+
+        select {
+            background: #1a1a1f;
+            border: 1px solid #2e2e38;
+            color: #ccc;
+            border-radius: 6px;
+            padding: 5px 8px;
+            font-size: 12px;
+            outline: none;
+        }
+
+        #username-display {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .topbar button {
+            background: none;
+            border: 1px solid #2e2e38;
+            color: #888;
+            padding: 5px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            width: auto;
+        }
+
+        .topbar button:hover {
+            border-color: #657728;
+            color: #90A63C;
+        }
+
+        textarea {
+            flex: 1;
+            background: #0f0f11;
+            border: 1px solid #2e2e38;
+            border-radius: 8px;
+            color: #e2e2e2;
+            padding: 10px 14px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+            line-height: 1.5;
+        }
+
+        textarea:focus {
+            border-color: #657728;
+        }
+
+        .input-area button {
+            background: #657728;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0 20px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            width: auto;
+        }
+
+        .input-area button:hover {
+            background: #566526;
+        }
+        .msg {
+            max-width: 70%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .msg.user {
+            align-self: flex-end;
+            background: #1e2d1e;
+            color: #c8e6a0;
+            border-bottom-right-radius: 4px;
+        }
+
+        .msg.assistant {
+            align-self: flex-start;
+            background: #1a1a1f;
+            border: 1px solid #2e2e38;
+            border-bottom-left-radius: 4px;
+        }
+
+        .msg.blocked {
+            align-self: flex-start;
+            background: #1f0f0f;
+            border: 1px solid #5b1f1f;
+            color: #fca5a5;
+            font-size: 12px;
+        }
+
+        .msg .meta {
+            font-size: 10px;
+            color: #666;
+            margin-top: 6px;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <span class="logo">⚗ Injection Lab</span>
+        <div class="spacer"></div>
+        <select id="model-select">
+            <option value="google/gemma-3-4b-it:free">Gemma 3 4B</option>
+            <option value="qwen/qwen3-8b:free">Qwen 3 8B</option>
+            <option value="mistralai/mistral-7b-instruct:free">Mistral 7B</option>
+        </select>
+        <span id="username-display"></span>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <div class="messages" id="messages"></div> 
+    
+    <div class="input-area">
+        <textarea id="input" rows="2" placeholder="Type a message..."></textarea>
+        <button onclick="sendMessage()">Send</button>
+    </div>
+</body>
+<script>
+    const token = localStorage.getItem('token')
+    if (!token) {
+        window.location.href = '/login.html'
+    }
+    
+    function decodeJWT(token) {
+        const payload = token.split('.')[1]
+        return JSON.parse(atob(payload))
+    }
+    const claims = decodeJWT(token)
+    document.getElementById('username-display').textContent = claims.Username
+
+    function logout() {
+        localStorage.removeItem('token')
+        document.cookie = 'token=; Max-Age=0; path=/'
+        window.location.href = '/login.html'
+    }
+
+    function addMessage(role, content, meta) {
+        const messages = document.getElementById('messages')
+        
+        const div = document.createElement('div')
+        div.className = 'msg ' + role
+        div.textContent = content
+        
+        if (meta) {
+            const metaDiv = document.createElement('div')
+            metaDiv.className = 'meta'
+            metaDiv.textContent = meta
+            div.appendChild(metaDiv)
+        }
+        
+        messages.appendChild(div)
+        div.scrollIntoView({ behavior: 'smooth' })
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById('input')
+        const message = input.value.trim()
+        if (!message) return
+
+        const model = document.getElementById('model-select').value
+
+        // show user message immediately
+        addMessage('user', message)
+        input.value = ''
+
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ message, model })
+            })
+
+            if (response.status === 401) {
+                window.location.href = '/login.html'
+                return
+            }
+
+            const data = await response.json()
+
+            if (data.blocked) {
+                addMessage('blocked', '🛡 Blocked: ' + data.block_reason)
+            } else {
+                addMessage('assistant', data.response, model)
+            }
+
+        } catch (e) {
+            addMessage('blocked', 'Error: ' + e.message)
+        }
+    }
+    document.getElementById('input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            sendMessage()
+        }
+    })
+
+</script>
+</html>
