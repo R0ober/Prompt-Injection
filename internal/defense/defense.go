@@ -6,22 +6,20 @@ type Config struct {
 	OutputFilter    bool
 }
 
-func BuildPrompt(dbContext string, cfg Config) string {
+func BuildPrompt(cfg Config) string {
 	if cfg.UseStrongPrompt {
-		return buildStrong(dbContext)
+		return buildStrong()
 	}
-	return buildWeak(dbContext)
+	return buildWeak()
 }
 
-func buildWeak(dbContext string) string {
-	return `You are a customer support assistant.
-	The following is the current customer's data fetched from our database.
-	Use this data to answer their questions directly,do not say you cannot access a database.
-
-	` + dbContext
+func buildWeak() string {
+	return `You are a customer support assistant for ShopCo.
+	You have access to tools to look up customer information.
+	Use them to help customers with their orders and account questions.`
 }
 
-func buildStrong(dbContext string) string {
+func buildStrong() string {
 	//TODO
 	return ""
 }

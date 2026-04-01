@@ -5,16 +5,18 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"temp-name/internal/auth"
 	"temp-name/internal/db"
 	"temp-name/internal/defense"
 	"temp-name/internal/llm"
+	"temp-name/internal/models"
+	"temp-name/internal/tools"
 )
 
 type ChatRequestBody struct {
-	Message string `json:"message"`
-	Model   string `json:"model"`
+	Message        string `json:"message"`
+	Model          string `json:"model"`
+	ConversationID string `json:"conversation_id"`
 }
 
 type ChatResponse struct {
@@ -70,19 +72,15 @@ func loginHandler(database *db.DB) http.HandlerFunc {
 func chatHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var chatRequest ChatRequestBody
-		err := json.NewDecoder(r.Body).Decode(&chatRequest)
-		if err != nil {
+
+		if err := json.NewDecoder(r.Body).Decode(&chatRequest); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
+
 		claims := auth.GetClaims(r)
 		if claims == nil {
 			http.Error(w, "invalid credentials", http.StatusUnauthorized)
-			return
-		}
-		llmContext, err := buildDBContext(database, claims.Username)
-		if err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
 		var cfg = defense.Config{
@@ -90,50 +88,67 @@ func chatHandler(database *db.DB) http.HandlerFunc {
 			InputFilter:     false,
 			OutputFilter:    false,
 		}
-		systemPrompt := defense.BuildPrompt(llmContext, cfg)
 
-		response, err := llm.Chat(chatRequest.Model, systemPrompt, chatRequest.Message)
+		history, err := database.GetHistory(chatRequest.ConversationID)
 		if err != nil {
-			log.Printf("DEBUG llm error: %v", err)
-			http.Error(w, "llm error", http.StatusBadGateway)
+			http.Error(w, "history error", http.StatusInternalServerError)
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ChatResponse{
-			Response: response,
-			Blocked:  false,
+		// nytt meddelande: system prompt + history + new user message
+		systemPrompt := defense.BuildPrompt(cfg)
+		messages := []models.Message{
+			{Role: "system", Content: systemPrompt},
+		}
+		messages = append(messages, history...)
+		messages = append(messages, models.Message{
+			Role:    "user",
+			Content: chatRequest.Message,
 		})
 
+		executor := &tools.ToolExecutor{DB: database}
+
+		// tool calling loop, låter llm max köra 5 iterationer
+		for i := 0; i < 5; i++ {
+			response, err := llm.Chat(chatRequest.Model, messages, tools.AvailableTools)
+			if err != nil {
+				log.Printf("llm error: %v", err)
+				http.Error(w, "llm error", http.StatusBadGateway)
+				return
+			}
+
+			// inga tool calls — llm är klar returna response
+			if len(response.ToolCalls) == 0 {
+				database.SaveMessage(chatRequest.ConversationID, claims.UserID, models.Message{Role: "user", Content: chatRequest.Message}, chatRequest.Model)
+				database.SaveMessage(chatRequest.ConversationID, claims.UserID, response, chatRequest.Model)
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(ChatResponse{
+					Response: response.Content,
+					Blocked:  false,
+				})
+				return
+			}
+
+			// append llm message with tool calls to history
+			messages = append(messages, response)
+
+			// kör alla tool calls
+			for _, toolCall := range response.ToolCalls {
+				result, err := executor.Execute(toolCall.Function.Name, toolCall.Function.Arguments)
+				if err != nil {
+					result = fmt.Sprintf("error: %v", err)
+				}
+				log.Printf("tool call: %s(%s) => %s", toolCall.Function.Name, toolCall.Function.Arguments, result)
+
+				// append tool result to messages
+				messages = append(messages, models.Message{
+					Role:       "tool",
+					Content:    result,
+					ToolCallID: toolCall.ID,
+				})
+			}
+		}
+		// if we hit max iterations return error
+		http.Error(w, "max tool iterations reached", http.StatusInternalServerError)
 	}
-}
-
-func buildDBContext(database *db.DB, username string) (string, error) {
-	var sb strings.Builder
-
-	user, err := database.GetUserByUsername(username)
-	if err != nil {
-		return "", fmt.Errorf("user fetch error: %w", err)
-	}
-
-	sb.WriteString("User information:\n")
-	sb.WriteString(fmt.Sprintf("  Username: %s\n", user.User.Username))
-	sb.WriteString(fmt.Sprintf("  Role: %s\n", user.User.Role))
-	sb.WriteString(fmt.Sprintf("  Notes: %s\n", user.User.Notes))
-
-	orders, err := database.GetOrdersByUserID(user.User.ID)
-	if err != nil {
-		return "", fmt.Errorf("order fetch error: %w", err)
-	}
-
-	sb.WriteString("\nOrder information:\n")
-	for i, order := range orders {
-		sb.WriteString(fmt.Sprintf("  Order %d:\n", i+1))
-		sb.WriteString(fmt.Sprintf("    Product: %s\n", order.Product))
-		sb.WriteString(fmt.Sprintf("    Amount: %.2f\n", order.Amount))
-		sb.WriteString(fmt.Sprintf("    Status: %s\n", order.Status))
-		sb.WriteString(fmt.Sprintf("    Notes: %s\n", order.PrivateNotes))
-	}
-
-	return sb.String(), nil
 }

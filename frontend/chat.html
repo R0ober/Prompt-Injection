@@ -166,6 +166,7 @@
     <div class="topbar">
         <span class="logo">⚗ Injection Lab</span>
         <div class="spacer"></div>
+            <button onclick="window.location.reload()">New Chat</button>
             <select id="model-select">
                 <option value="google/gemma-3-12b-it">Gemma 3 12B</option>
                 <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
@@ -183,6 +184,7 @@
     </div>
 </body>
 <script>
+    const conversationID = crypto.randomUUID()
     const token = localStorage.getItem('token')
     if (!token) {
         window.location.href = '/login.html'
@@ -237,7 +239,10 @@
                     'Content-Type': 'application/json',
                     'Authorization': 'Bearer ' + token
                 },
-                body: JSON.stringify({ message, model })
+                body: JSON.stringify({ message, 
+                                        model,
+                                        conversation_id: conversationID 
+                                    })
             })
 
             if (response.status === 401) {

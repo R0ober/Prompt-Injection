@@ -2,8 +2,11 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
+
+	"temp-name/internal/models"
 
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -103,6 +106,18 @@ func (db *DB) Migrate() error {
         created_at    TIMESTAMPTZ DEFAULT NOW()
     );
 
+	CREATE TABLE IF NOT EXISTS messages (
+		id              SERIAL PRIMARY KEY,
+		conversation_id TEXT NOT NULL,
+		user_id         INT REFERENCES users(id),
+		role            TEXT NOT NULL,
+		content         TEXT,
+		tool_calls      TEXT,
+		tool_call_id    TEXT,
+		model           TEXT,
+		created_at      TIMESTAMPTZ DEFAULT NOW()
+	);
+
     CREATE TABLE IF NOT EXISTS orders (
         id            SERIAL PRIMARY KEY,
         user_id       INT REFERENCES users(id),
@@ -196,4 +211,74 @@ func (db *DB) Seed() error {
 		}
 	}
 	return nil
+}
+
+func (db *DB) SaveMessage(conversationID string, userID int, msg models.Message, model string) error {
+	toolCallsJSON := ""
+	if len(msg.ToolCalls) > 0 {
+		b, err := json.Marshal(msg.ToolCalls)
+		if err != nil {
+			return fmt.Errorf("marshal tool calls: %w", err)
+		}
+		toolCallsJSON = string(b)
+	}
+	_, err := db.Exec(`
+        INSERT INTO messages (conversation_id, user_id, role, content, tool_calls, tool_call_id, model)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		conversationID, userID, msg.Role, msg.Content, toolCallsJSON, msg.ToolCallID, model,
+	)
+	if err != nil {
+		return fmt.Errorf("save message error: %w", err)
+	}
+	return nil
+}
+
+func (db *DB) GetHistory(conversationID string) ([]models.Message, error) {
+	rows, err := db.Query(`
+        SELECT role, content, tool_calls, tool_call_id 
+        FROM messages 
+        WHERE conversation_id = $1 
+        ORDER BY created_at ASC
+        LIMIT 20`,
+		conversationID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get history error: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []models.Message
+	for rows.Next() {
+		var msg models.Message
+		var toolCallsJSON string
+		if err := rows.Scan(&msg.Role, &msg.Content, &toolCallsJSON, &msg.ToolCallID); err != nil {
+			return nil, fmt.Errorf("scan message error: %w", err)
+		}
+		if toolCallsJSON != "" {
+			if err := json.Unmarshal([]byte(toolCallsJSON), &msg.ToolCalls); err != nil {
+				return nil, fmt.Errorf("unmarshal tool calls: %w", err)
+			}
+		}
+		messages = append(messages, msg)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	return messages, nil
+}
+func (db *DB) GetAllUsernames() ([]string, error) {
+	rows, err := db.Query(`SELECT username FROM users ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("get all usernames: %w", err)
+	}
+	defer rows.Close()
+	var usernames []string
+	for rows.Next() {
+		var username string
+		if err := rows.Scan(&username); err != nil {
+			return nil, fmt.Errorf("scan username: %w", err)
+		}
+		usernames = append(usernames, username)
+	}
+	return usernames, nil
 }
