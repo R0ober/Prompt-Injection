@@ -1,4 +1,4 @@
-# Prompt Injection Lab
+# Prompt Injection
  
 A platform for evaluating prompt injection attacks and defenses for LLM powered applications. Built with Go, PostgreSQL, and vanilla HTML/JS.
 
