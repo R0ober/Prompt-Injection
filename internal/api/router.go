@@ -1,16 +1,22 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
+	"strings"
 	"temp-name/internal/auth"
 	"temp-name/internal/db"
 	"temp-name/internal/defense"
 	"temp-name/internal/llm"
 	"temp-name/internal/models"
 	"temp-name/internal/tools"
+
+	"github.com/ledongthuc/pdf"
 )
 
 type ChatRequestBody struct {
@@ -32,11 +38,103 @@ func NewRouter(database *db.DB) http.Handler {
 
 	// skyddade routes
 	mux.Handle("POST /api/chat", auth.Middleware(chatHandler(database)))
+	mux.Handle("POST /api/upload", auth.Middleware(uploadHandler(database)))
 
-	//static fil
-	mux.Handle("/", http.FileServer(http.Dir("frontend")))
+	//redirect root till login
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/login.html", http.StatusFound)
+			return
+		}
+		http.FileServer(http.Dir("frontend")).ServeHTTP(w, r)
+	})
 
 	return mux
+}
+
+func uploadHandler(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims := auth.GetClaims(r)
+		if claims == nil {
+			http.Error(w, "unathorized", http.StatusUnauthorized)
+			return
+		}
+		conversationID := r.FormValue("converstation_id")
+		if conversationID == "" {
+			http.Error(w, "missing converstation_id", http.StatusBadRequest)
+			return
+		}
+		// parse med 10 mb storleks limit
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			http.Error(w, "file to large", http.StatusBadRequest)
+			return
+		}
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			http.Error(w, "no file", http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+
+		// convertera pdf eller txt fil till string
+		text, err := extractText(file, header.Filename)
+		if err != nil {
+			http.Error(w, "could not read file", http.StatusBadRequest)
+			return
+		}
+		if text == "" {
+			http.Error(w, "empty file", http.StatusBadRequest)
+			return
+		}
+
+		// lägg til fil i chat history
+		msg := models.Message{
+			Role: "user",
+			Content: fmt.Sprintf(
+				"I have uploaded a file named '%s'. Here is its contents:\n\n[FILE CONTENT START]\n%s\n[FILE CONTENT END]",
+				header.Filename,
+				text,
+			),
+		}
+		database.SaveMessage(conversationID, claims.UserID, msg, "")
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "uploaded"})
+
+	}
+}
+
+func extractText(file multipart.File, filename string) (string, error) {
+	buf, err := io.ReadAll(file)
+	if err != nil {
+		return "", fmt.Errorf("read file: %w", err)
+	}
+
+	if strings.HasSuffix(strings.ToLower(filename), ".pdf") {
+		reader, err := pdf.NewReader(bytes.NewReader(buf), int64(len(buf)))
+		if err != nil {
+			return "", fmt.Errorf("pdf reader: %w", err)
+		}
+		var sb strings.Builder
+		for i := 1; i <= reader.NumPage(); i++ {
+			page := reader.Page(i)
+			if page.V.IsNull() {
+				continue
+			}
+			text, err := page.GetPlainText(nil)
+			if err != nil {
+				continue
+			}
+			sb.WriteString(text)
+		}
+		return sb.String(), nil
+	}
+
+	if strings.HasSuffix(strings.ToLower(filename), ".txt") {
+		return string(buf), nil
+	}
+
+	return "", fmt.Errorf("unsupported file type")
 }
 
 func loginHandler(database *db.DB) http.HandlerFunc {
@@ -89,7 +187,7 @@ func chatHandler(database *db.DB) http.HandlerFunc {
 			OutputFilter:    false,
 		}
 
-		history, err := database.GetHistory(chatRequest.ConversationID)
+		history, err := database.GetHistory(chatRequest.ConversationID, claims.UserID)
 		if err != nil {
 			http.Error(w, "history error", http.StatusInternalServerError)
 			return

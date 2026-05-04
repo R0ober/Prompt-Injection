@@ -233,14 +233,14 @@ func (db *DB) SaveMessage(conversationID string, userID int, msg models.Message,
 	return nil
 }
 
-func (db *DB) GetHistory(conversationID string) ([]models.Message, error) {
+func (db *DB) GetHistory(conversationID string, userID int) ([]models.Message, error) {
 	rows, err := db.Query(`
         SELECT role, content, tool_calls, tool_call_id 
         FROM messages 
-        WHERE conversation_id = $1 
+        WHERE conversation_id = $1
         ORDER BY created_at ASC
         LIMIT 20`,
-		conversationID,
+		conversationID, userID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("get history error: %w", err)
