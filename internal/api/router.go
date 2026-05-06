@@ -198,7 +198,7 @@ func chatHandler(database *db.DB) http.HandlerFunc {
 		}
 
 		// nytt meddelande: system prompt + history + new user message
-		systemPrompt := defense.BuildPrompt(cfg)
+		systemPrompt := defense.BuildPrompt(cfg, claims.Username, claims.Role)
 		messages := []models.Message{
 			{Role: "system", Content: systemPrompt},
 		}
@@ -211,7 +211,7 @@ func chatHandler(database *db.DB) http.HandlerFunc {
 		executor := &tools.ToolExecutor{DB: database}
 
 		// tool calling loop, låter llm max köra 5 iterationer
-		for i := 0; i < 5; i++ {
+		for i := 0; i < 10; i++ {
 			response, err := llm.Chat(chatRequest.Model, messages, tools.AvailableTools)
 			if err != nil {
 				log.Printf("llm error: %v", err)

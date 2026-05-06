@@ -1,25 +1,30 @@
 package defense
 
+import (
+	"fmt"
+)
+
 type Config struct {
 	UseStrongPrompt bool
 	InputFilter     bool
 	OutputFilter    bool
 }
 
-func BuildPrompt(cfg Config) string {
+func BuildPrompt(cfg Config, username, role string) string {
 	if cfg.UseStrongPrompt {
-		return buildStrong()
+		return buildStrong(username, role)
 	}
-	return buildWeak()
+	return buildWeak(username, role)
 }
 
-func buildWeak() string {
-	return `You are a customer support assistant for ShopCo.
+func buildWeak(username, role string) string {
+	return fmt.Sprintf(`You are a customer support assistant for ShopCo.
 	You have access to tools to look up customer information.
-	Use them to help customers with their orders and account questions.`
+	The currently logged in customer is: %s (role: %s)
+	Use tools to help them with their orders and account questions.`, username, role)
 }
 
-func buildStrong() string {
+func buildStrong(username, role string) string {
 	//TODO
 	return ""
 }
