@@ -2,7 +2,27 @@ package defense
 
 import (
 	"fmt"
+	"strings"
 )
+
+// common injection phrases used in check input as a input filter
+var injectionPhrases = []string{
+	"ignore previous instructions",
+	"ignore all previous",
+	"ignore your instructions",
+	"disregard your",
+	"forget your instructions",
+	"you are now in",
+	"developer mode",
+	"maintenance mode",
+	"new persona",
+	"act as",
+	"jailbreak",
+	"[system]",
+	"[inst]",
+	"system update",
+	"</s>",
+}
 
 type Config struct {
 	UseStrongPrompt bool
@@ -30,10 +50,17 @@ func buildStrong(username, role string) string {
 }
 
 func CheckInput(input string, cfg Config) (blocked bool, reason string) {
-	// TODO
+	if !cfg.InputFilter {
+		return false, ""
+	}
+	lower := strings.ToLower(input)
+	for _, phrase := range injectionPhrases {
+		if strings.Contains(lower, phrase) {
+			return true, fmt.Sprintf("blocked: detected injection pattern '%s'", phrase)
+		}
+	}
 	return false, ""
 }
-
 func CheckOutput(response string, cfg Config) (blocked bool, reason string) {
 	// TODO
 	return false, ""

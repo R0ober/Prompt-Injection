@@ -187,7 +187,7 @@ func chatHandler(database *db.DB) http.HandlerFunc {
 		}
 		var cfg = defense.Config{
 			UseStrongPrompt: false,
-			InputFilter:     false,
+			InputFilter:     true,
 			OutputFilter:    false,
 		}
 
@@ -196,7 +196,15 @@ func chatHandler(database *db.DB) http.HandlerFunc {
 			http.Error(w, "history error", http.StatusInternalServerError)
 			return
 		}
-
+		//input filter
+		if blocked, reason := defense.CheckInput(chatRequest.Message, cfg); blocked {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(ChatResponse{
+				Blocked:     true,
+				BlockReason: reason,
+			})
+			return
+		}
 		// nytt meddelande: system prompt + history + new user message
 		systemPrompt := defense.BuildPrompt(cfg, claims.Username, claims.Role)
 		messages := []models.Message{
