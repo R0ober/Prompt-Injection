@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Injection Lab — Chat</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
        
         * {
@@ -153,6 +154,15 @@
             color: #fca5a5;
             font-size: 12px;
         }
+        .msg.system-msg {
+            align-self: center;
+            background: none;
+            color: #555;
+            font-size: 12px;
+            font-style: italic;
+            border: none;
+            padding: 4px;
+        }
 
         .msg .meta {
             font-size: 10px;
@@ -160,11 +170,35 @@
             margin-top: 6px;
         }
 
+        .upload-btn {
+            background: none;
+            border: 1px solid #2e2e38;
+            border-radius: 8px;
+            padding: 0 12px;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            color: #666;
+            transition: all .15s;
+            width: auto;
+            flex-shrink: 0;
+        }
+
+        .upload-btn:hover {
+            border-color: #657728;
+            color: #90A63C;
+        }
+
+        .upload-btn .material-icons {
+            font-size: 20px;
+        }
+
     </style>
 </head>
 <body>
     <div class="topbar">
-        <span class="logo">⚗ Injection Lab</span>
+        <span class="logo">Injection Demo</span>
         <div class="spacer"></div>
             <button onclick="window.location.reload()">New Chat</button>
             <select id="model-select">
@@ -179,6 +213,10 @@
     <div class="messages" id="messages"></div> 
     
     <div class="input-area">
+        <label for="file-upload" class="upload-btn" title="Upload file">
+            <span class="material-icons">attach_file</span>
+        </label>
+        <input type="file" id="file-upload" accept=".pdf,.txt" style="display:none" onchange="uploadFile()">
         <textarea id="input" rows="2" placeholder="Type a message..."></textarea>
         <button onclick="sendMessage()">Send</button>
     </div>
@@ -253,7 +291,7 @@
             const data = await response.json()
 
             if (data.blocked) {
-                addMessage('blocked', '🛡 Blocked: ' + data.block_reason)
+                addMessage('blocked', 'Blocked: ' + data.block_reason)
             } else {
                 addMessage('assistant', data.response, model)
             }
@@ -261,6 +299,40 @@
         } catch (e) {
             addMessage('blocked', 'Error: ' + e.message)
         }
+    }
+
+    async function uploadFile() {
+        const fileInput = document.getElementById('file-upload')
+        const file = fileInput.files[0]
+        if (!file) return
+
+        // show uploading message in chat
+        addMessage('system-msg', `Uploading ${file.name}...`)
+
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('conversation_id', conversationID)
+
+        try {
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                },
+                body: formData
+            })
+
+            if (response.ok) {
+                addMessage('system-msg', `${file.name} uploaded, you can now ask about it`)
+            } else {
+                addMessage('system-msg', `Upload failed`)
+            }
+        } catch (e) {
+            addMessage('system-msg', `Upload error: ${e.message}`)
+        }
+
+        // reset file input
+        fileInput.value = ''
     }
     document.getElementById('input').addEventListener('keydown', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {

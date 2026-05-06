@@ -237,7 +237,7 @@ func (db *DB) GetHistory(conversationID string, userID int) ([]models.Message, e
 	rows, err := db.Query(`
         SELECT role, content, tool_calls, tool_call_id 
         FROM messages 
-        WHERE conversation_id = $1
+        WHERE conversation_id = $1 AND user_id = $2
         ORDER BY created_at ASC
         LIMIT 20`,
 		conversationID, userID,
