@@ -58,7 +58,9 @@ var AvailableTools = []models.Tool{
 }
 
 type ToolExecutor struct {
-	DB *db.DB
+	DB             *db.DB
+	CallerUsername string
+	CallerRole     string
 }
 
 func (t *ToolExecutor) Execute(name, arguments string) (string, error) {
@@ -70,7 +72,11 @@ func (t *ToolExecutor) Execute(name, arguments string) (string, error) {
 		if err := json.Unmarshal([]byte(arguments), &args); err != nil {
 			return "", fmt.Errorf("parse args: %w", err)
 		}
+		if args.Username != t.CallerUsername && t.CallerRole != "admin" {
+			return "", fmt.Errorf("unauthorized: cannot access profile for %s", args.Username)
+		}
 		return t.GetProfile(args.Username)
+
 	case "get_orders":
 		var args struct {
 			Username string `json:"username"`
@@ -78,9 +84,18 @@ func (t *ToolExecutor) Execute(name, arguments string) (string, error) {
 		if err := json.Unmarshal([]byte(arguments), &args); err != nil {
 			return "", fmt.Errorf("parse args: %w", err)
 		}
+		if args.Username != t.CallerUsername && t.CallerRole != "admin" {
+			return "", fmt.Errorf("unauthorized: cannot access orders for %s", args.Username)
+		}
 		return t.GetOrders(args.Username)
+
 	case "get_all_users":
+		// bara admin for köra detta
+		if t.CallerRole != "admin" {
+			return "", fmt.Errorf("unauthorized: get_all_users is admin only")
+		}
 		return t.GetAllUsers()
+
 	default:
 		return "", fmt.Errorf("unknown tool: %s", name)
 	}

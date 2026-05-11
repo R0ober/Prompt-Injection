@@ -187,7 +187,7 @@ func chatHandler(database *db.DB) http.HandlerFunc {
 		}
 		var cfg = defense.Config{
 			UseStrongPrompt: false,
-			InputFilter:     true,
+			InputFilter:     false,
 			OutputFilter:    false,
 		}
 
@@ -216,9 +216,11 @@ func chatHandler(database *db.DB) http.HandlerFunc {
 			Content: chatRequest.Message,
 		})
 
-		executor := &tools.ToolExecutor{DB: database}
+		executor := &tools.ToolExecutor{DB: database,
+			CallerUsername: claims.Username,
+			CallerRole:     claims.Role}
 
-		// tool calling loop, låter llm max köra 5 iterationer
+		// tool calling loop, låter llm max köra 10 iterationer
 		for i := 0; i < 10; i++ {
 			response, err := llm.Chat(chatRequest.Model, messages, tools.AvailableTools)
 			if err != nil {
